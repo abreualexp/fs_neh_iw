@@ -483,3 +483,142 @@ function NEH_IW(p)
 
     return melhorseq
 end
+
+
+function FF(p,xParam)
+    a = 4
+    b = 1
+
+    (n,m) = size(p)
+    sequence = zeros(Int64, n)
+    bestSequence = zeros(Int64, n)
+    bestIWT = 100*sum(p)
+    scheduled = zeros(Int64, n)
+
+    C = zeros(n,m)
+
+    function completionIfScheduled(job::Int, mac::Int; pos::Int = 1, sequence = [], C = [])
+        
+        completion = -1
+
+        if pos == 1
+
+            completion = sum( p[job,machine] for machine in 1:mac)
+            return completion
+
+        else
+            lastJob = 0
+            freePos = 0
+            for firstFreePos in 1:n
+                if sequence[firstFreePos] == 0
+                    freePos = copy(firstFreePos)
+                    break
+                else
+                    lastJob = copy(sequence[firstFreePos])
+                end
+            end
+
+            if freePos != pos
+                error()
+            end
+
+            completion = 0
+            for machine in 1:mac
+                completion = max( completion, C[lastJob, machine]) + p[job, machine]
+            end
+
+            return completion
+        end
+        
+        if completion == -1
+            error()
+        else
+            return completion
+        end
+    end
+
+    function XI(j; k = 0, C = [], sequence = [])
+
+        if k == 0
+            IT = sum(
+                (m * max(0, completionIfScheduled(j, i-1) - 0 )) / 
+                (i - b + k * (m - i + b) / (n - 2) )
+            for i in 2:m)
+    
+            AT = completionIfScheduled(j, m)
+    
+            xi = ((n - k - 2)/a) * IT + AT
+    
+            return xi
+        else
+            IT = sum(
+                (m * max(0, completionIfScheduled(j, i-1, pos = k+1, C = C, sequence = sequence) - C[sequence[k], i] )) / 
+                (i - b + k * (m - i + b) / (n - 2) )
+            for i in 2:m)
+    
+            AT = completionIfScheduled(j, m, pos = k+1, C=C, sequence=sequence)
+    
+            xi = ((n - k - 2)/a) * IT + AT
+    
+            return xi
+        end
+
+    end
+
+    xi0 = [ XI(j) for j in 1:n ]
+
+    U = sortperm(xi0)
+
+    for x in 1:xParam
+
+
+        fill!(C, 0)
+        fill!(sequence, 0)
+        fill!(scheduled, 0)
+
+        firstJob = U[x]
+
+        sequence[1] = firstJob
+        scheduled[firstJob] = 1
+
+        for machine in 1:m
+            C[firstJob, machine] = completionIfScheduled(firstJob, machine)
+        end
+
+        for k in 1:n-1
+            minXi = 100*sum(p)
+            addJob = -1
+            for jobToAdd in 1:n
+                if scheduled[jobToAdd] == 0
+                    thisXi = XI(jobToAdd, k=k, C=C, sequence=sequence)
+                    if minXi > thisXi
+                        minXi = copy(thisXi)
+                        addJob = copy(jobToAdd)
+                    end
+                end
+            end
+            
+            if addJob == -1
+                error()
+            else
+                for machine in 1:m
+                    C[addJob, machine] = completionIfScheduled(addJob, machine, pos = k+1, C = C, sequence = sequence)
+                end
+
+                sequence[k+1] = addJob
+                scheduled[addJob] = 1
+            end
+        end
+
+        IW = IWT(p, n, sequence)
+
+
+        if bestIWT > IW
+
+            bestSequence = copy(sequence)
+            bestIWT = copy(IW)
+        end
+    end
+
+    return bestSequence, bestIWT
+end
